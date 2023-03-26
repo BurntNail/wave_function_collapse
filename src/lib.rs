@@ -134,55 +134,52 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
             }
         }
 
-        if !least_possibilities.is_empty() {
-            let mut rng = thread_rng();
+        if least_possibilities.len() <= 1 {
+            return true;
+        }
 
-            if least_possibilities.len() == 1 {
-                return true;
+        let mut rng = thread_rng();
+        let lp = least_possibilities.remove(rng.gen_range(0..least_possibilities.len()));
+
+        let mut possibilities_matrix = self.in_progress_map[lp]
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, b)| if b { Some(i) } else { None })
+            .collect_vec();
+
+        possibilities_matrix.append(&mut possibilities_matrix.clone());
+
+        let mut biased_possibilities_matrix = vec![];
+
+        for i in possibilities_matrix {
+            for _ in 0..self.variants[i].bias() {
+                biased_possibilities_matrix.push(i);
             }
+        }
 
-            let lp = least_possibilities.remove(rng.gen_range(0..least_possibilities.len()));
-
-            let mut possibilities_matrix = self.in_progress_map[lp]
-                .clone()
-                .into_iter()
-                .enumerate()
-                .filter_map(|(i, b)| if b { Some(i) } else { None })
-                .collect_vec();
-
-            possibilities_matrix.append(&mut possibilities_matrix.clone());
-
-            let mut biased_possibilities_matrix = vec![];
-
-            for i in possibilities_matrix {
-                for _ in 0..self.variants[i].bias() {
-                    biased_possibilities_matrix.push(i);
+        for dx in -2..=2 {
+            for dy in -2..=2 {
+                if dx == 0 && dy == 0 {
+                    continue;
                 }
-            }
 
-            for dx in -2..=2 {
-                for dy in -2..=2 {
-                    if dx == 0 && dy == 0 {
-                        continue;
-                    }
-
-                    if let Some(pos) = self.get_with_delta(lp, dx, dy) {
-                        //slight neighbour bias
-                        if let Some(i) = Self::extract_index(&self.in_progress_map[pos]) {
-                            for _ in 0..(self.variants[i].bias().pow(3)) {
-                                biased_possibilities_matrix.push(i);
-                            }
+                if let Some(pos) = self.get_with_delta(lp, dx, dy) {
+                    //neighbour bias
+                    if let Some(i) = Self::extract_index(&self.in_progress_map[pos]) {
+                        for _ in 0..(self.variants[i].bias()) {
+                            biased_possibilities_matrix.push(i);
                         }
                     }
                 }
             }
-
-            self.in_progress_map[lp].fill(false);
-            self.in_progress_map[lp].set(
-                biased_possibilities_matrix[rng.gen_range(0..biased_possibilities_matrix.len())],
-                true,
-            );
         }
+
+        self.in_progress_map[lp].fill(false);
+        self.in_progress_map[lp].set(
+            biased_possibilities_matrix[rng.gen_range(0..biased_possibilities_matrix.len())],
+            true,
+        );
 
         Self::finished(&self.in_progress_map, 0..self.width, 0..self.height)
     }

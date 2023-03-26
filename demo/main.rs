@@ -144,6 +144,7 @@ fn main() {
                     for _ in 0..100 {
                         if generator.step() {
                             finished = true;
+                            println!("done");
                             break;
                         }
                     }

@@ -31,6 +31,9 @@ impl<T> Array2D<T> {
     pub fn len(&self) -> usize {
         self.backing.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.backing.is_empty()
+    }
     pub fn size(&self) -> (usize, usize) {
         (
             self.width,
