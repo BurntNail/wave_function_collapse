@@ -1,5 +1,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
+//TODO: better documentation
+//TODO: better names
+//TODO: change to make own struct with methods, separate from Self
+//TODO: run one by one, and then make method with self for final vec
+
 mod array2d;
 pub use array2d::*;
 

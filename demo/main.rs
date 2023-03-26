@@ -3,6 +3,11 @@ use enum_derive_list::AllVariants;
 use std::collections::HashMap;
 use wave_function_collapse::WFCState;
 
+//TODO: use images if not too much of a faff
+//TODO: generating vs generated - 2 windows, close windows?
+//TODO: re-generate option
+//TODO: change settings (full-on egui project?)
+
 #[derive(AllVariants, Clone, Debug, Eq, PartialEq, Hash, Copy)]
 pub enum TerrainExample {
     Sand,
