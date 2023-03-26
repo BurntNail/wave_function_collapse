@@ -36,8 +36,8 @@ impl Coloured for TerrainExample {
 }
 
 impl WFCState for TerrainExample {
-    fn get_variants() -> Vec<Self> {
-        TerrainExample::all_variants().to_vec()
+    fn get_variants() -> &'static [Self] {
+        TerrainExample::all_variants()
     }
 
     fn to_usize(self) -> usize {
@@ -74,7 +74,7 @@ impl WFCState for TerrainExample {
 }
 
 fn main() {
-    const SIZE: usize = 50;
+    const SIZE: usize = 40;
     const SCALE: usize = 15;
 
     let mut map: Vec<TerrainExample> = WFCState::generate(SIZE, SIZE);
