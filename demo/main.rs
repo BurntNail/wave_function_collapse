@@ -1,9 +1,11 @@
 use enum_derive_list::AllVariants;
+use piston_window::Key::Insert;
 use piston_window::{
     rectangle, Button, Key, MouseButton, PistonWindow, PressEvent, RenderEvent, Transformed,
     WindowSettings,
 };
 use std::collections::HashMap;
+use std::time::Instant;
 use wave_function_collapse::{coords_to_index, WFCGenerator, WFCState};
 
 //TODO: use images if not too much of a faff
@@ -42,21 +44,41 @@ impl WFCState for TerrainExample {
     fn get_variants() -> &'static [Self] {
         TerrainExample::all_variants()
     }
-
     fn to_usize(self) -> usize {
         self as usize
     }
 
-    fn bias(&self) -> usize {
-        match self {
-            TerrainExample::Sand => 2,
-            TerrainExample::DarkSand => 1,
-            TerrainExample::Water => 2,
-            TerrainExample::DeepWater => 3,
-            TerrainExample::Rocks => 1,
-            TerrainExample::Grass => 2,
-            TerrainExample::Forest => 3,
-            TerrainExample::DeepForest => 1,
+    fn bias(&self, o: &Self) -> usize {
+        use TerrainExample::*;
+
+        if !Self::possible_neighbours()[self].contains(o) {
+            return 0;
+        }
+
+        match (self, o) {
+            //sand
+            (Sand | DarkSand, Sand | DarkSand) => 2,
+            (Sand, Water) | (Water, Sand) | (Sand, Grass) | (Grass, Sand) => 1,
+            //darksand
+            (DarkSand, Water) | (Water, DarkSand) => 2,
+            //water
+            (Water, Water) => 3,
+            (Water, Forest) | (Forest, Water) => 1,
+            (Water, DeepWater) | (DeepWater, Water) => 2,
+            //deep water
+            (DeepWater, DeepWater) => 5,
+            //rocks
+            (DeepWater | DeepForest, Rocks) | (Rocks, DeepWater | DeepForest) => 1,
+            //grass
+            (Grass, Grass) => 2,
+            (Grass, Forest) | (Forest, Grass) => 3,
+            //forest
+            (Forest, Forest) => 4,
+            (Forest, DeepForest) | (DeepForest, Forest) => 3,
+            //deep forest
+            (DeepForest, DeepForest) => 5,
+
+            _ => unimplemented!("{self:?} vs {o:?}"),
         }
     }
 
@@ -64,21 +86,21 @@ impl WFCState for TerrainExample {
         use TerrainExample::{DarkSand, DeepForest, DeepWater, Forest, Grass, Rocks, Sand, Water};
 
         HashMap::from([
-            (Sand, vec![Water, Grass]),
-            (DarkSand, vec![Sand, Water]),
-            (Water, vec![DeepWater, Forest]),
-            (DeepWater, vec![Water, Rocks]),
+            (Sand, vec![Sand, Water, Grass]),
+            (DarkSand, vec![DarkSand, Sand, Water]),
+            (Water, vec![Water, Sand, DeepWater, Forest]),
+            (DeepWater, vec![DeepWater, Water, Rocks]),
             (Rocks, vec![DeepWater, DeepForest]),
-            (Grass, vec![Sand, Forest]),
-            (Forest, vec![Grass, DeepForest, Water]),
-            (DeepForest, vec![Rocks, Forest]),
+            (Grass, vec![Grass, Sand, Forest]),
+            (Forest, vec![Forest, Grass, DeepForest, Water]),
+            (DeepForest, vec![DeepForest, Rocks, Forest]),
         ])
     }
 }
 
 fn main() {
-    const SIZE: usize = 75;
-    const SCALE: usize = 15;
+    const SIZE: usize = 500;
+    const SCALE: usize = 2;
 
     let mut generator: WFCGenerator<TerrainExample> = WFCGenerator::new(SIZE, SIZE);
     let mut finished = false;
@@ -96,6 +118,7 @@ fn main() {
     while let Some(e) = win.next() {
         if let Some(_r) = e.render_args() {
             if changed {
+                changed = false;
                 win.draw_2d(&e, |c, gl, _device| {
                     let (width, height) = match c.viewport.iter().next() {
                         None => {
@@ -127,44 +150,65 @@ fn main() {
                 });
             }
         }
-        if finished {
-            continue;
-        }
 
         if let Some(Button::Mouse(btn)) = e.press_args() {
-            match btn {
-                MouseButton::Left => {
-                    changed = true;
-                    finished = generator.step();
-                    drawing = generator.get_current();
-                }
-                MouseButton::Right => {
-                    changed = true;
+            if !finished {
+                match btn {
+                    MouseButton::Left => {
+                        changed = true;
+                        finished = generator.step();
+                        drawing = generator.get_current();
+                    }
+                    MouseButton::Right => {
+                        changed = true;
 
-                    for _ in 0..100 {
+                        for _ in 0..SIZE {
+                            if generator.step() {
+                                finished = true;
+                                println!("done");
+                                break;
+                            }
+                        }
+
+                        drawing = generator.get_current();
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some(Button::Keyboard(k)) = e.press_args() {
+            match k {
+                Key::F if !finished => {
+                    loop {
                         if generator.step() {
-                            finished = true;
-                            println!("done");
                             break;
                         }
                     }
+                    finished = true;
+                    changed = true;
+                    drawing = generator.get_current();
+                }
+                Key::R => {
+                    println!("Restarting");
+                    generator = WFCGenerator::new(SIZE, SIZE);
 
+                    let timer = Instant::now();
+                    loop {
+                        if generator.step() {
+                            break;
+                        }
+                    }
+                    println!("Generating took {:?}.", timer.elapsed());
+
+                    finished = true;
+                    changed = true;
                     drawing = generator.get_current();
                 }
                 _ => {}
             }
         }
 
-        if matches!(e.press_args(), Some(Button::Keyboard(Key::F))) {
-            loop {
-                if generator.step() {
-                    break;
-                }
-            }
-            finished = true;
-            drawing = generator.get_current();
-        }
+        if matches!(e.press_args(), Some(Button::Keyboard(Key::F))) {}
     }
-
-    // println!("{map:?}");
 }

@@ -2,8 +2,6 @@
 
 //TODO: better documentation
 //TODO: better names
-//TODO: change to make own struct with methods, separate from Self
-//TODO: run one by one, and then make method with self for final vec
 
 mod array2d;
 pub use array2d::*;
@@ -136,16 +134,6 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
             .filter_map(|(i, b)| if b { Some(i) } else { None })
             .collect_vec();
 
-        possibilities_matrix.append(&mut possibilities_matrix.clone());
-
-        let mut biased_possibilities_matrix = vec![];
-
-        for i in possibilities_matrix {
-            for _ in 0..self.variants[i].bias() {
-                biased_possibilities_matrix.push(i);
-            }
-        }
-
         for dx in -2..=2 {
             for dy in -2..=2 {
                 if dx == 0 && dy == 0 {
@@ -154,9 +142,15 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
 
                 if let Some(pos) = self.get_with_delta((x, y), dx, dy) {
                     //neighbour bias
-                    if let Some(i) = Self::extract_index(&self.in_progress_map[pos]) {
-                        for _ in 0..(self.variants[i].bias()) {
-                            biased_possibilities_matrix.push(i);
+                    if let Some(neighbour_index) = Self::extract_index(&self.in_progress_map[pos]) {
+                        for possible_option in self.in_progress_map[(x, y)]
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, b)| if *b { Some(&self.variants[i]) } else { None })
+                        {
+                            for _ in 0..(self.variants[neighbour_index].bias(possible_option)) {
+                                possibilities_matrix.push(neighbour_index);
+                            }
                         }
                     }
                 }
@@ -165,7 +159,13 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
 
         self.in_progress_map[(x, y)].fill(false);
         self.in_progress_map[(x, y)].set(
-            biased_possibilities_matrix[rng.gen_range(0..biased_possibilities_matrix.len())],
+            if possibilities_matrix.is_empty() {
+                self.variants[rng.gen_range(0..self.variant_nos)]
+                    .clone()
+                    .to_usize()
+            } else {
+                possibilities_matrix[rng.gen_range(0..possibilities_matrix.len())]
+            },
             true,
         );
 
@@ -230,7 +230,7 @@ pub trait WFCState: Clone + 'static {
     fn to_usize(self) -> usize;
 
     ///Bias from 1 to 5
-    fn bias(&self) -> usize;
+    fn bias(&self, o: &Self) -> usize;
 
     ///Returns all the possible neighbours for each Self
     fn possible_neighbours() -> HashMap<Self, Vec<Self>>;

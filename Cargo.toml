@@ -12,17 +12,9 @@ itertools = "0.10.5"
 piston_window = "0.128.0"
 rand = "0.8.5"
 
-[dev-dependencies]
-criterion = "0.4.0"
-
 [profile.release]
 debug = true
-
 
 [[bin]]
 name = "wfc_demo"
 path = "demo/main.rs"
-
-[[bench]]
-name = "wfc_bench"
-harness = false
