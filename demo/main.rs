@@ -1,6 +1,6 @@
 use enum_derive_list::AllVariants;
 use piston_window::{
-    rectangle, Button, MouseButton, PistonWindow, PressEvent, RenderEvent, Transformed,
+    rectangle, Button, Key, MouseButton, PistonWindow, PressEvent, RenderEvent, Transformed,
     WindowSettings,
 };
 use std::collections::HashMap;
@@ -97,7 +97,7 @@ fn main() {
         if let Some(_r) = e.render_args() {
             if changed {
                 win.draw_2d(&e, |c, gl, _device| {
-                    let (width, height) = match c.viewport.iter().nth(0) {
+                    let (width, height) = match c.viewport.iter().next() {
                         None => {
                             eprintln!("Couldn't get viewport!");
                             (0.0, 0.0)
@@ -134,14 +134,14 @@ fn main() {
         if let Some(Button::Mouse(btn)) = e.press_args() {
             match btn {
                 MouseButton::Left => {
-                    finished = generator.step();
                     changed = true;
+                    finished = generator.step();
                     drawing = generator.get_current();
                 }
                 MouseButton::Right => {
                     changed = true;
 
-                    for _ in 0..10 {
+                    for _ in 0..100 {
                         if generator.step() {
                             finished = true;
                             break;
@@ -152,6 +152,17 @@ fn main() {
                 }
                 _ => {}
             }
+        }
+
+        if matches!(e.press_args(), Some(Button::Keyboard(Key::F))) {
+            loop {
+                if generator.step() {
+                    println!("here");
+                    break;
+                }
+            }
+            finished = true;
+            drawing = generator.get_current();
         }
     }
 
