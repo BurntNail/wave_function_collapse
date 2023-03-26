@@ -29,6 +29,8 @@ pub struct WFCGenerator<T: 'static> {
     in_progress_map: Array2D<BitVec>,
     ///The type we're using for the states
     ty: PhantomData<T>,
+    ///The next tile to work out
+    next_to_generate: (usize, usize),
 }
 
 impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
@@ -64,6 +66,7 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
         }
     }
 
+    #[allow(clippy::must_use_candidate)]
     pub fn new(width: usize, height: usize) -> Self {
         let variants = T::get_variants();
         let variant_nos = variants.len();
@@ -83,65 +86,50 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
                 })
                 .collect(),
             in_progress_map: Array2D::filled(width, height, Self::filled_bitvec(variant_nos, true)),
+            next_to_generate: (0, 0),
             ty: PhantomData,
         }
     }
 
     ///Steps through generation, returning whether or not it is finished
+    #[must_use]
     pub fn step(&mut self) -> bool {
-        let mut least_possibilities = vec![];
-        let mut least_possibilities_ones_count = self.variant_nos;
+        let (x, y) = self.next_to_generate;
 
-        for x in 0..self.width {
-            for y in 0..self.height {
-                if self.in_progress_map[(x, y)].count_ones() == 1 {
-                    continue;
-                }
+        if x == self.width - 1 && y == self.height - 1 {
+            return true;
+        }
+        if x < self.width {
+            self.next_to_generate.0 += 1;
+        } else {
+            self.next_to_generate.0 = 0;
+            self.next_to_generate.1 += 1;
+        }
 
-                for (dx, dy) in [
-                    (-1, -1),
-                    (-1, 0),
-                    (-1, 1),
-                    (0, -1),
-                    (0, -1),
-                    (1, -1),
-                    (1, 0),
-                    (1, 1),
-                ] {
-                    if dx == 0 && dy == 0 {
-                        continue;
-                    }
+        for (dx, dy) in [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, -1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ] {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
 
-                    if let Some((new_x, new_y)) = self.get_with_delta((x, y), dx, dy) {
-                        if let Some(i) = Self::extract_index(&self.in_progress_map[(new_x, new_y)])
-                        {
-                            self.in_progress_map[(x, y)] &=
-                                self.neighbour_possibilities[&i].clone();
-                        }
-                    }
-                }
-
-                let ones_here = self.in_progress_map[(x, y)].count_ones();
-
-                if ones_here > 1 && ones_here < least_possibilities_ones_count {
-                    least_possibilities.clear();
-                    least_possibilities.push((x, y));
-
-                    least_possibilities_ones_count = ones_here;
-                } else if least_possibilities_ones_count == ones_here {
-                    least_possibilities.push((x, y));
+            if let Some((new_x, new_y)) = self.get_with_delta((x, y), dx, dy) {
+                if let Some(i) = Self::extract_index(&self.in_progress_map[(new_x, new_y)]) {
+                    self.in_progress_map[(x, y)] &= self.neighbour_possibilities[&i].clone();
                 }
             }
         }
 
-        if least_possibilities.len() <= 1 {
-            return true;
-        }
-
         let mut rng = thread_rng();
-        let lp = least_possibilities.remove(rng.gen_range(0..least_possibilities.len()));
 
-        let mut possibilities_matrix = self.in_progress_map[lp]
+        let mut possibilities_matrix = self.in_progress_map[(x, y)]
             .clone()
             .into_iter()
             .enumerate()
@@ -164,7 +152,7 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
                     continue;
                 }
 
-                if let Some(pos) = self.get_with_delta(lp, dx, dy) {
+                if let Some(pos) = self.get_with_delta((x, y), dx, dy) {
                     //neighbour bias
                     if let Some(i) = Self::extract_index(&self.in_progress_map[pos]) {
                         for _ in 0..(self.variants[i].bias()) {
@@ -175,13 +163,13 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
             }
         }
 
-        self.in_progress_map[lp].fill(false);
-        self.in_progress_map[lp].set(
+        self.in_progress_map[(x, y)].fill(false);
+        self.in_progress_map[(x, y)].set(
             biased_possibilities_matrix[rng.gen_range(0..biased_possibilities_matrix.len())],
             true,
         );
 
-        Self::finished(&self.in_progress_map, 0..self.width, 0..self.height)
+        false
     }
 
     #[allow(clippy::must_use_candidate)]
