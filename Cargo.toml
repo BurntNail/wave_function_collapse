@@ -1,0 +1,17 @@
+[package]
+name = "wave_function_collapse"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "wfc_demo"
+path = "demo/main.rs"
+
+[dependencies]
+bitvec = "1.0.1"
+drawing-squares = "0.1.0"
+enum_derive_list = "0.1.0"
+itertools = "0.10.5"
+rand = "0.8.5"
