@@ -1,5 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use enum_derive_list::AllVariants;
 use std::collections::HashMap;
+use std::time::Duration;
 use wave_function_collapse::WFCState;
 
 #[derive(AllVariants, Clone, Debug, Eq, PartialEq, Hash, Copy)]
@@ -53,15 +55,20 @@ impl WFCState for TerrainExample {
 }
 
 fn bench_terrain_example(c: &mut Criterion) {
-    c.bench_function("wfc size 20", |b| {
+    let mut group = c.benchmark_group("wfcs");
+    group.measurement_time(Duration::from_secs(50));
+
+    group.bench_function("wfc size 20", |b| {
         b.iter(|| TerrainExample::generate(black_box(20), black_box(20)));
     });
-    c.bench_function("wfc size 10", |b| {
+    group.bench_function("wfc size 10", |b| {
         b.iter(|| TerrainExample::generate(black_box(10), black_box(10)));
     });
-    c.bench_function("wfc size 4", |b| {
+    group.bench_function("wfc size 4", |b| {
         b.iter(|| TerrainExample::generate(black_box(4), black_box(4)));
     });
+
+    group.finish();
 }
 
 criterion_group!(benches, bench_terrain_example);
