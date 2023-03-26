@@ -7,27 +7,25 @@ pub struct Array2D<T> {
     width: usize,
 }
 
+pub fn index_to_coords(width: usize, index: usize) -> (usize, usize) {
+    (index / width, index % width)
+}
+pub fn coords_to_index(width: usize, (x, y): (usize, usize)) -> usize {
+    y * width + x
+}
+
 impl<T> Array2D<T> {
     pub fn add_element(&mut self, el: T) {
         self.backing.push(el);
     }
     pub fn remove(&mut self, index: (usize, usize)) -> T {
-        return self
-            .backing
-            .remove(Self::coords_to_index(self.width, index));
+        return self.backing.remove(coords_to_index(self.width, index));
     }
     pub fn to_inner(self) -> Vec<T> {
         self.backing
     }
     pub fn contains(&self, cnd: impl Fn(&T) -> bool) -> bool {
         self.backing.iter().any(cnd)
-    }
-
-    pub fn index_to_coords(width: usize, index: usize) -> (usize, usize) {
-        (index / width, index % width)
-    }
-    pub fn coords_to_index(width: usize, (x, y): (usize, usize)) -> usize {
-        y * width + x
     }
 
     pub fn len(&self) -> usize {
@@ -63,11 +61,11 @@ impl<T> Index<(usize, usize)> for Array2D<T> {
     type Output = T;
 
     fn index(&self, index: (usize, usize)) -> &Self::Output {
-        &self.backing[Self::coords_to_index(self.width, index)]
+        &self.backing[coords_to_index(self.width, index)]
     }
 }
 impl<T> IndexMut<(usize, usize)> for Array2D<T> {
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
-        &mut self.backing[Self::coords_to_index(self.width, index)]
+        &mut self.backing[coords_to_index(self.width, index)]
     }
 }

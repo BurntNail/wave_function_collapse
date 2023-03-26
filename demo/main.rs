@@ -1,7 +1,10 @@
-use drawing_squares::{Coloured, Window, WindowConfig};
 use enum_derive_list::AllVariants;
+use piston_window::{
+    rectangle, Button, MouseButton, PistonWindow, PressEvent, RenderEvent, Transformed,
+    WindowSettings,
+};
 use std::collections::HashMap;
-use wave_function_collapse::WFCState;
+use wave_function_collapse::{coords_to_index, WFCGenerator, WFCState};
 
 //TODO: use images if not too much of a faff
 //TODO: generating vs generated - 2 windows, close windows?
@@ -20,8 +23,8 @@ pub enum TerrainExample {
     DeepForest,
 }
 
-impl Coloured for TerrainExample {
-    fn get_colour(&self) -> [f32; 4] {
+impl TerrainExample {
+    pub fn get_colour(&self) -> [f32; 4] {
         match self {
             TerrainExample::Sand => [222.0 / 255.0, 252.0 / 255.0, 70.0 / 255.0, 1.0],
             TerrainExample::DarkSand => [125.0 / 255.0, 135.0 / 255.0, 74.0 / 255.0, 1.0],
@@ -74,29 +77,83 @@ impl WFCState for TerrainExample {
 }
 
 fn main() {
-    const SIZE: usize = 40;
+    const SIZE: usize = 75;
     const SCALE: usize = 15;
 
-    let mut map: Vec<TerrainExample> = WFCState::generate(SIZE, SIZE);
+    let mut generator: WFCGenerator<TerrainExample> = WFCGenerator::new(SIZE, SIZE);
+    let mut finished = false;
 
-    let mut window = Window::new(WindowConfig::new(
-        "wfc_test".into(),
-        [(SIZE * SCALE) as u32, (SIZE * SCALE) as u32],
-        true,
-        false,
-    ));
+    let mut win: PistonWindow =
+        WindowSettings::new("WFC", [(SIZE * SCALE) as u32, (SIZE * SCALE) as u32])
+            .exit_on_esc(true)
+            .resizable(false)
+            .build()
+            .expect("unable to make window");
 
-    let mut nvs = Vec::with_capacity(SIZE);
-    for _ in 0..SIZE {
-        let mut v = Vec::with_capacity(SIZE);
-        for _ in 0..SIZE {
-            v.push(map.remove(0));
+    let mut drawing = generator.get_current();
+    let mut changed = false;
+
+    while let Some(e) = win.next() {
+        if let Some(_r) = e.render_args() {
+            if changed {
+                win.draw_2d(&e, |c, gl, _device| {
+                    let (width, height) = match c.viewport.iter().nth(0) {
+                        None => {
+                            eprintln!("Couldn't get viewport!");
+                            (0.0, 0.0)
+                        }
+                        Some(vp) => (vp.window_size[0], vp.window_size[1]),
+                    };
+                    let cell_width = width / SIZE as f64;
+                    let cell_height = height / SIZE as f64;
+                    let rect = [0.0, 0.0, cell_width, cell_height];
+
+                    for y in 0..SIZE {
+                        for x in 0..SIZE {
+                            let xpos = y as f64 * cell_width;
+                            let ypos = x as f64 * cell_height;
+                            let trans = c.transform.trans(xpos, ypos);
+
+                            rectangle(
+                                drawing[coords_to_index(SIZE, (x, y))]
+                                    .map(|x| x.get_colour())
+                                    .unwrap_or_default(), //TODO: use the finish method
+                                rect,
+                                trans,
+                                gl,
+                            );
+                        }
+                    }
+                });
+            }
         }
-        nvs.push(v);
+        if finished {
+            continue;
+        }
+
+        if let Some(Button::Mouse(btn)) = e.press_args() {
+            match btn {
+                MouseButton::Left => {
+                    finished = generator.step();
+                    changed = true;
+                    drawing = generator.get_current();
+                }
+                MouseButton::Right => {
+                    changed = true;
+
+                    for _ in 0..10 {
+                        if generator.step() {
+                            finished = true;
+                            break;
+                        }
+                    }
+
+                    drawing = generator.get_current();
+                }
+                _ => {}
+            }
+        }
     }
 
-    window.set_grid(nvs);
-    window.can_continue(|_| {});
-
-    println!("{map:?}");
+    // println!("{map:?}");
 }

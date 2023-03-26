@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 bitvec = "1.0.1"
-drawing-squares = "0.1.0"
 enum_derive_list = "0.1.0"
 itertools = "0.10.5"
+piston_window = "0.128.0"
 rand = "0.8.5"
 
 [dev-dependencies]
