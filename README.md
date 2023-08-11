@@ -4,4 +4,7 @@ Wave function Collpase is an algorithm where the image is made of a grid of cell
 
 I will mention that for the sake of speed, I've changed the algorithm so this isn't true WFC, but it runs fast enough to generate an image in minutes, not hours.
 
+## Compilation
+ - Just `cargo run` or `cargo run --release`
+
 ![WFC Demo Image](wfc_example.png)
