@@ -1,12 +1,9 @@
 use enum_derive_list::AllVariants;
-use piston_window::Key::Insert;
-use piston_window::{
-    rectangle, Button, Key, MouseButton, PistonWindow, PressEvent, RenderEvent, Transformed,
-    WindowSettings,
-};
 use std::collections::HashMap;
 use std::time::Instant;
 use wave_function_collapse::{coords_to_index, WFCGenerator, WFCState};
+use indicatif::ProgressBar;
+use image::{Rgb, ImageBuffer};
 
 //TODO: use images if not too much of a faff
 //TODO: generating vs generated - 2 windows, close windows?
@@ -23,19 +20,21 @@ pub enum TerrainExample {
     Grass,
     Forest,
     DeepForest,
+    Nothing,
 }
 
 impl TerrainExample {
-    pub fn get_colour(&self) -> [f32; 4] {
+    pub fn get_colour(&self) -> [u8; 3] {
         match self {
-            TerrainExample::Sand => [222.0 / 255.0, 252.0 / 255.0, 70.0 / 255.0, 1.0],
-            TerrainExample::DarkSand => [125.0 / 255.0, 135.0 / 255.0, 74.0 / 255.0, 1.0],
-            TerrainExample::Water => [37.0 / 255.0, 158.0 / 255.0, 146.0 / 255.0, 1.0],
-            TerrainExample::DeepWater => [5.0 / 255.0, 43.0 / 255.0, 114.0 / 255.0, 1.0],
-            TerrainExample::Rocks => [39.0 / 255.0, 44.0 / 255.0, 53.0 / 255.0, 1.0],
-            TerrainExample::Grass => [65.0 / 255.0, 186.0 / 255.0, 52.0 / 255.0, 1.0],
-            TerrainExample::Forest => [31.0 / 255.0, 102.0 / 255.0, 23.0 / 255.0, 1.0],
-            TerrainExample::DeepForest => [47.0 / 255.0, 68.0 / 255.0, 35.0 / 255.0, 1.0],
+            TerrainExample::Sand => [222, 252, 70],
+            TerrainExample::DarkSand => [125, 135, 74],
+            TerrainExample::Water => [37, 158, 146],
+            TerrainExample::DeepWater => [5, 43, 114],
+            TerrainExample::Rocks => [39, 44, 53],
+            TerrainExample::Grass => [65, 186, 52],
+            TerrainExample::Forest => [31, 102, 23],
+            TerrainExample::DeepForest => [47, 68, 35],
+            TerrainExample::Nothing => [0; 3],
         }
     }
 }
@@ -96,119 +95,40 @@ impl WFCState for TerrainExample {
             (DeepForest, vec![DeepForest, Rocks, Forest]),
         ])
     }
+
+    fn none_option() -> Self {
+        Self::Nothing
+    }
 }
 
 fn main() {
-    const SIZE: usize = 500;
-    const SCALE: usize = 2;
+    const SIZE: usize = 100;
 
     let mut generator: WFCGenerator<TerrainExample> = WFCGenerator::new(SIZE, SIZE);
     let mut finished = false;
+    let bar = ProgressBar::new((SIZE * SIZE) as u64);
 
-    let mut win: PistonWindow =
-        WindowSettings::new("WFC", [(SIZE * SCALE) as u32, (SIZE * SCALE) as u32])
-            .exit_on_esc(true)
-            .resizable(false)
-            .build()
-            .expect("unable to make window");
-
-    let mut drawing = generator.get_current();
-    let mut changed = false;
-
-    while let Some(e) = win.next() {
-        if let Some(_r) = e.render_args() {
-            if changed {
-                changed = false;
-                win.draw_2d(&e, |c, gl, _device| {
-                    let (width, height) = match c.viewport.iter().next() {
-                        None => {
-                            eprintln!("Couldn't get viewport!");
-                            (0.0, 0.0)
-                        }
-                        Some(vp) => (vp.window_size[0], vp.window_size[1]),
-                    };
-                    let cell_width = width / SIZE as f64;
-                    let cell_height = height / SIZE as f64;
-                    let rect = [0.0, 0.0, cell_width, cell_height];
-
-                    for y in 0..SIZE {
-                        for x in 0..SIZE {
-                            let xpos = y as f64 * cell_width;
-                            let ypos = x as f64 * cell_height;
-                            let trans = c.transform.trans(xpos, ypos);
-
-                            rectangle(
-                                drawing[coords_to_index(SIZE, (x, y))]
-                                    .map(|x| x.get_colour())
-                                    .unwrap_or_default(), //TODO: use the finish method
-                                rect,
-                                trans,
-                                gl,
-                            );
-                        }
-                    }
-                });
-            }
+    while !finished {
+        for _ in 0..10 {
+            finished = generator.step_moar_random();
         }
-
-        if let Some(Button::Mouse(btn)) = e.press_args() {
-            if !finished {
-                match btn {
-                    MouseButton::Left => {
-                        changed = true;
-                        finished = generator.step();
-                        drawing = generator.get_current();
-                    }
-                    MouseButton::Right => {
-                        changed = true;
-
-                        for _ in 0..SIZE {
-                            if generator.step() {
-                                finished = true;
-                                println!("done");
-                                break;
-                            }
-                        }
-
-                        drawing = generator.get_current();
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        if let Some(Button::Keyboard(k)) = e.press_args() {
-            match k {
-                Key::F if !finished => {
-                    loop {
-                        if generator.step() {
-                            break;
-                        }
-                    }
-                    finished = true;
-                    changed = true;
-                    drawing = generator.get_current();
-                }
-                Key::R => {
-                    println!("Restarting");
-                    generator = WFCGenerator::new(SIZE, SIZE);
-
-                    let timer = Instant::now();
-                    loop {
-                        if generator.step() {
-                            break;
-                        }
-                    }
-                    println!("Generating took {:?}.", timer.elapsed());
-
-                    finished = true;
-                    changed = true;
-                    drawing = generator.get_current();
-                }
-                _ => {}
-            }
-        }
-
-        if matches!(e.press_args(), Some(Button::Keyboard(Key::F))) {}
+        bar.inc(10);
     }
+
+    bar.finish();
+
+    println!("Maybe finished?");
+
+
+    let finished = generator.finish();
+
+    let mut buff = ImageBuffer::new(SIZE as u32, SIZE as u32);
+
+    println!("Saving to image");
+
+    for (terrain, pixel) in finished.into_iter().zip(buff.pixels_mut()) {
+        *pixel = Rgb::from(terrain.get_colour())
+    }
+
+    buff.save("out.png").unwrap();
 }

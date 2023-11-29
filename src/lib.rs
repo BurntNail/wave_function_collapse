@@ -54,12 +54,15 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
         true
     }
     ///Extracts an index from a bitvec - returns None if no index is found, or there are more than one indices
-    fn extract_index(from: &BitVec) -> Option<usize> {
+    fn extract_index(from: &BitVec, print: bool) -> Option<usize> {
         if from.count_ones() == 1 {
             from.iter()
                 .enumerate()
                 .find_map(|(i, b)| if *b { Some(i) } else { None })
         } else {
+            if print {
+                println!("Found {} ones", from.count_ones());
+            }
             None
         }
     }
@@ -91,41 +94,55 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
 
     ///Steps through generation, returning whether or not it is finished
     #[must_use]
-    pub fn step(&mut self) -> bool {
-        let (x, y) = self.next_to_generate;
-
-        if x == self.width - 1 && y == self.height - 1 {
+    pub fn step_moar_random(&mut self) -> bool {
+        if Self::finished(&self.in_progress_map, 0..self.width, 0..self.height) {
             return true;
         }
-        if x < self.width {
-            self.next_to_generate.0 += 1;
-        } else {
-            self.next_to_generate.0 = 0;
-            self.next_to_generate.1 += 1;
-        }
 
-        for (dx, dy) in [
-            (-1, -1),
-            (-1, 0),
-            (-1, 1),
-            (0, -1),
-            (0, -1),
-            (1, -1),
-            (1, 0),
-            (1, 1),
-        ] {
-            if dx == 0 && dy == 0 {
-                continue;
-            }
+        let deltas = (-2..=2).permutations(2);
 
-            if let Some((new_x, new_y)) = self.get_with_delta((x, y), dx, dy) {
-                if let Some(i) = Self::extract_index(&self.in_progress_map[(new_x, new_y)]) {
-                    self.in_progress_map[(x, y)] &= self.neighbour_possibilities[&i].clone();
+        for x in 0..self.width {
+            for y in 0..self.height {
+                for (dx, dy) in deltas.clone().into_iter().map(|mut x| (x.remove(0), x.remove(0))) {
+                   if let Some((new_x, new_y)) = self.get_with_delta((x, y), dx, dy) {
+                        if let Some(i) = Self::extract_index(&self.in_progress_map[(new_x, new_y)], false)
+                        {
+                            self.in_progress_map[(x, y)] &=
+                                self.neighbour_possibilities[&i].clone();
+                        }
+                    }
                 }
             }
         }
 
+
+        let mut min_possibilities = usize::MAX;
+        let mut min_list = vec![];
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let possibilities = self.in_progress_map[(x, y)].count_ones();
+
+                if possibilities <= 1 {
+                    continue;
+                }
+
+                if possibilities < min_possibilities {
+                    min_possibilities = possibilities;
+                    min_list.clear();
+                }
+
+                if possibilities == min_possibilities {
+                    min_list.push((x, y));
+                }
+            }
+        }
+
+        if min_list.len() == 0 {
+            return true;
+        }
+
         let mut rng = thread_rng();
+        let (x, y) = min_list.remove(rng.gen_range(0..min_list.len()));
 
         let mut possibilities_matrix = self.in_progress_map[(x, y)]
             .clone()
@@ -142,7 +159,7 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
 
                 if let Some(pos) = self.get_with_delta((x, y), dx, dy) {
                     //neighbour bias
-                    if let Some(neighbour_index) = Self::extract_index(&self.in_progress_map[pos]) {
+                    if let Some(neighbour_index) = Self::extract_index(&self.in_progress_map[pos], false) {
                         for possible_option in self.in_progress_map[(x, y)]
                             .iter()
                             .enumerate()
@@ -172,6 +189,7 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
         false
     }
 
+
     #[allow(clippy::must_use_candidate)]
     pub const fn get_with_delta(
         &self,
@@ -193,12 +211,25 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
     }
 
     ///Finishes - panics if we can't find indices and aren't properly finished yet
-    pub fn finish(self) -> Vec<T> {
+    pub fn finish(mut self) -> Vec<T> {
         let mut nv = Vec::with_capacity(self.width * self.height);
-        for x in 1..=self.width {
-            for y in 1..=self.height {
-                let index = Self::extract_index(&self.in_progress_map[(x, y)]).unwrap();
-                nv.push(self.variants[index].clone());
+        let mut rng = thread_rng();
+
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let mut current: Vec<usize> = self.in_progress_map[(x, y)].iter().enumerate().filter_map(|(i, bool)| if *bool {Some(i)} else {None}).collect();
+                if current.len() > 1 {
+                    let picked = current.remove(rng.gen_range(0..current.len()));
+                    self.in_progress_map[(x, y)].clear();
+                    self.in_progress_map[(x, y)].set(picked, true);
+                }
+
+
+                let variant = match Self::extract_index(&self.in_progress_map[(x, y)], true) {
+                    Some(x) => self.variants[x].clone(),
+                    None => T::none_option(),
+                };
+                nv.push(variant);
             }
         }
         nv
@@ -209,7 +240,7 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
         let mut nv = Vec::with_capacity(self.width * self.height);
         for x in 0..self.width {
             for y in 0..self.height {
-                if let Some(i) = Self::extract_index(&self.in_progress_map[(x, y)]) {
+                if let Some(i) = Self::extract_index(&self.in_progress_map[(x, y)], false) {
                     nv.push(Some(self.variants[i].clone()));
                 } else {
                     nv.push(None);
@@ -217,6 +248,20 @@ impl<T: Clone + 'static + WFCState> WFCGenerator<T> {
             }
         }
         nv
+    }
+
+    pub fn get_no_done (&self) -> usize {
+        let mut wk = 0;
+
+        for x in 0..self.width {
+            for y in 0..self.height {
+                if self.in_progress_map[(x, y)].count_ones() <= 1 {
+                    wk += 1;
+                }
+            }
+        }
+
+        wk
     }
 }
 
@@ -234,4 +279,6 @@ pub trait WFCState: Clone + 'static {
 
     ///Returns all the possible neighbours for each Self
     fn possible_neighbours() -> HashMap<Self, Vec<Self>>;
+
+    fn none_option() -> Self;
 }
