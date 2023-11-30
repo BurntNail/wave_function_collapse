@@ -4,6 +4,7 @@ use std::time::Instant;
 use wave_function_collapse::{coords_to_index, WFCGenerator, WFCState};
 use indicatif::ProgressBar;
 use image::{Rgb, ImageBuffer};
+use indicatif::style::ProgressStyle;
 
 //TODO: use images if not too much of a faff
 //TODO: generating vs generated - 2 windows, close windows?
@@ -102,17 +103,32 @@ impl WFCState for TerrainExample {
 }
 
 fn main() {
-    const SIZE: usize = 100;
+    const SIZE: usize = 250;
 
     let mut generator: WFCGenerator<TerrainExample> = WFCGenerator::new(SIZE, SIZE);
     let mut finished = false;
-    let bar = ProgressBar::new((SIZE * SIZE) as u64);
+    let bar = ProgressBar::new((SIZE * SIZE) as u64).with_style(ProgressStyle::with_template("{spinner} Elapsed: [{elapsed_precise}], ETA: [{eta_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7}").unwrap());
 
+    let mut buff = ImageBuffer::new(SIZE as u32, SIZE as u32);
+
+    for px in buff.pixels_mut() {
+        *px = Rgb::from([0, 0, 0])
+    }
+
+    println!("Saving to image");
+
+    let mut i = 0;
     while !finished {
         for _ in 0..10 {
             finished = generator.step_moar_random();
+            i += 1;
         }
         bar.inc(10);
+
+        for (terrain, pixel) in generator.get_current().into_iter().zip(buff.pixels_mut()).filter_map(|(terrain, px)| terrain.map(|terrain| (terrain, px))) {
+            *pixel = Rgb::from(terrain.get_colour());
+        }
+        buff.save(format!("imgs/out_{i}.png")).unwrap();
     }
 
     bar.finish();
@@ -122,9 +138,6 @@ fn main() {
 
     let finished = generator.finish();
 
-    let mut buff = ImageBuffer::new(SIZE as u32, SIZE as u32);
-
-    println!("Saving to image");
 
     for (terrain, pixel) in finished.into_iter().zip(buff.pixels_mut()) {
         *pixel = Rgb::from(terrain.get_colour())
